@@ -9,6 +9,8 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | Version | Tag | Upstream commit |
 |---------|-----|-----------------|
 | v1.10.0 | [`v1.10.0`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/tree/v1.10.0) | [`f67cf7b`](https://github.com/taiki-e/create-gh-release-action/commit/f67cf7b2dadd83d36b981e674a6b08063997ce68) |
+| v1.11.0 | [`v1.11.0`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/tree/v1.11.0) | [`eba8ea9`](https://github.com/taiki-e/create-gh-release-action/commit/eba8ea96c86cca8a37f1b56e94b4d13301fba651) |
+| v1.9.1 | [`v1.9.1`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/tree/v1.9.1) | [`26b8050`](https://github.com/taiki-e/create-gh-release-action/commit/26b80501670402f1999aff4b934e1574ef2d3705) |
 | v1.9.3 | [`v1.9.3`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/tree/v1.9.3) | [`c5baa0b`](https://github.com/taiki-e/create-gh-release-action/commit/c5baa0b5dc700cf06439d87935e130220a6882d9) |
 
 ## Privacy
