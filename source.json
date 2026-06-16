@@ -1,6 +1,11 @@
 {
   "owner": "taiki-e",
   "repo": "create-gh-release-action",
-  "version": "",
-  "url": "https://github.com/taiki-e/create-gh-release-action"
+  "version": "v1.11.0",
+  "commit_sha": "eba8ea96c86cca8a37f1b56e94b4d13301fba651",
+  "url": "https://github.com/taiki-e/create-gh-release-action",
+  "policy_sha": "d636be7e43ef829af6e853da6b3c7566db9f72fe",
+  "test_policy_sha": "843adf9e4b8f85d0c08b27b9d0b09dd094b54702",
+  "test_agent_version": "1",
+  "harden_agent_version": "1"
 }

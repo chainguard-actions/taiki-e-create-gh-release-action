@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+set -CeEuo pipefail
+IFS=$'\n\t'
+
+retry() {
+  for i in {1..10}; do
+    if "$@"; then
+      return 0
+    else
+      sleep "${i}"
+    fi
+  done
+  "$@"
+}
+bail() {
+  printf '::error::%s\n' "$*"
+  exit 1
+}
+warn() {
+  printf '::warning::%s\n' "$*"
+}
+download_and_checksum() {
+  local url="${1:?}"
+  local checksum="${2:?}"
+  retry curl --proto '=https' --tlsv1.2 -fsSL --retry 10 "${url}" -o tmp
+  if type -P sha256sum >/dev/null; then
+    sha256sum -c - >/dev/null <<<"${checksum} *tmp"
+  elif type -P shasum >/dev/null; then
+    # GitHub-hosted macOS runner does not install GNU Coreutils by default.
+    # https://github.com/actions/runner-images/issues/90
+    shasum -a 256 -c - >/dev/null <<<"${checksum} *tmp"
+  else
+    warn "checksum requires 'sha256sum' or 'shasum' command; consider installing one of them; skipped checksum for $(basename -- "${url}")"
+  fi
+}
+
+if [[ $# -gt 0 ]]; then
+  bail "invalid argument '$1'"
+fi
+
+# Input options
+title="${INPUT_TITLE:?}"
+changelog="${INPUT_CHANGELOG:-}"
+allow_missing_changelog="${INPUT_ALLOW_MISSING_CHANGELOG:-}"
+draft="${INPUT_DRAFT:-}"
+branch="${INPUT_BRANCH:-}"
+prefix="${INPUT_PREFIX:-}"
+token="${INPUT_TOKEN:-"${GITHUB_TOKEN:-"${DEFAULT_GITHUB_TOKEN:-}"}"}"
+# This prevents tokens from being exposed to subprocesses via environment variables.
+unset INPUT_TOKEN GITHUB_TOKEN GH_TOKEN DEFAULT_GITHUB_TOKEN
+ref="${INPUT_REF:-"${GITHUB_REF:-}"}"
+
+if [[ -z "${token}" ]]; then
+  bail "neither GITHUB_TOKEN environment variable nor 'token' input option is set"
+fi
+
+if [[ "${ref}" != "refs/tags/"* ]]; then
+  bail "tag ref should start with 'refs/tags/': '${ref}'; this action only supports events from tag or release by default; see <https://github.com/taiki-e/create-gh-release-action#supported-events> for more"
+fi
+tag="${ref#refs/tags/}"
+
+release_options=("${tag}")
+parse_changelog_options=()
+if [[ ! "${tag}" =~ ^${prefix}-?v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z\.-]+)?(\+[0-9A-Za-z\.-]+)?$ ]]; then
+  # TODO: In the next major version, reject underscores in pre-release strings and build metadata.
+  if [[ ! "${tag}" =~ ^${prefix}-?v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z_\.-]+)?(\+[0-9A-Za-z_\.-]+)?$ ]]; then
+    bail "invalid tag format '${tag}'"
+  fi
+  warn "underscores are not allowed in semver's pre-release strings and build metadata; this will be rejected in the next major version of create-gh-release-action: '${tag}'"
+  # parse-changelog 0.5+'s default version format strictly adheres to semver.
+  parse_changelog_options+=(--version-format '^\d+\.\d+\.\d+(-[\w\.-]+)?(\+[\w\.-]+)?$')
+fi
+# TODO: In the next major version, reject underscores in pre-release strings and build metadata.
+if [[ "${tag}" =~ ^${prefix}-?v?[0-9\.]+-[0-9A-Za-z_\.-]+(\+[0-9A-Za-z_\.-]+)?$ ]]; then
+  release_options+=("--prerelease")
+fi
+
+version="${tag}"
+# extract the portion of the tag matching the prefix pattern
+if [[ -n "${prefix}" ]]; then
+  prefix=$(grep -Eo "^${prefix}" <<<"${tag}")
+  prefix="${prefix%-}"
+  version="${tag#"${prefix}"}"
+  version="${version#-}"
+fi
+version="${version#v}"
+
+# interpolate $tag, $version, and $prefix into the title string
+title="${title/\$tag/${tag}}"
+title="${title/\$version/${version}}"
+title="${title/\$prefix/${prefix}}"
+# interpolate $tag, $version, and $prefix into the changelog path
+changelog="${changelog/\$tag/${tag}}"
+changelog="${changelog/\$version/${version}}"
+changelog="${changelog/\$prefix/${prefix}}"
+case "${draft}" in
+  true) release_options+=("--draft") ;;
+  false) ;;
+  *) bail "'draft' input option must be 'true' or 'false': '${draft}'" ;;
+esac
+case "${allow_missing_changelog}" in
+  true | false) ;;
+  *) bail "'allow_missing_changelog' input option must be 'true' or 'false': '${allow_missing_changelog}'" ;;
+esac
+
+if [[ -n "${branch}" ]]; then
+  git fetch &>/dev/null
+  if ! git branch -r --contains | grep -Eq "(^|\s)origin/(${branch})$"; then
+    git branch -r --contains
+    bail "creating of release is only allowed on commits contained in branches that match the specified pattern '${branch}'"
+  fi
+fi
+
+notes=''
+if [[ -n "${changelog}" ]]; then
+  # https://github.com/taiki-e/install-action/blob/HEAD/manifests/parse-changelog.json
+  parse_changelog_version='0.6.16'
+  exe=''
+  case "$(uname -m)" in
+    aarch64 | arm64) host_arch=aarch64 ;;
+    ppc64le) host_arch=powerpc64le ;;
+    riscv64) host_arch=riscv64 ;;
+    s390x) host_arch=s390x ;;
+    *) host_arch=x86_64 ;;
+  esac
+  case "$(uname -s)" in
+    Linux)
+      parse_changelog_target=${host_arch}-unknown-linux-musl
+      case "${host_arch}" in
+        x86_64) parse_changelog_hash='26aa111f36cd2e184aa21d34bd0afef2a879266d90f63534cc2b0481aea4880b' ;;
+        aarch64) parse_changelog_hash='a12bc74533edfc90f5f409d70db9f18e05a99675337b3d28d02390676cd50a59' ;;
+        powerpc64le) parse_changelog_hash='9cc0e07c6a261648960cc52b073211e5607df7b6e0999fd2092878affd1c2b12' ;;
+        riscv64)
+          parse_changelog_target=${host_arch}gc-unknown-linux-musl
+          parse_changelog_hash='eb0856a3c1c2fa0b61123ae036d1ee21765826ef0e4a6951ccc4c7bdfb7e6498'
+          ;;
+        s390x)
+          parse_changelog_target=${host_arch}-unknown-linux-gnu
+          parse_changelog_hash='87eddbf1dc1f44316cd313284335eb3725953b98fd8a041807bd77e02f59ef42'
+          ;;
+        *) bail "unrecognized host '${parse_changelog_target}'" ;;
+      esac
+      ;;
+    Darwin)
+      parse_changelog_target=${host_arch}-apple-darwin
+      case "${host_arch}" in
+        x86_64) parse_changelog_hash='41037c04d1d42ce0dc39aa58c0187536977a6debcccf809af4abff63c56b4d85' ;;
+        aarch64) parse_changelog_hash='cefabc34953cadb3499c2a80ecb5d5b3a64995f27c8214595613f737a128ce6f' ;;
+        *) bail "unrecognized host '${parse_changelog_target}'" ;;
+      esac
+      ;;
+    MINGW* | MSYS* | CYGWIN* | Windows_NT)
+      exe=.exe
+      parse_changelog_target=${host_arch}-pc-windows-msvc
+      case "${host_arch}" in
+        x86_64) parse_changelog_hash='5c61e4becf430c24616499df9225c90457f45ad59d4b68a2adc7c57d8de887ba' ;;
+        aarch64) parse_changelog_hash='ed8731a7bf6431d290dbbb2e8bf0b167fcbd2ba9ef45c2a9ea0ed57783086166' ;;
+        *) bail "unrecognized host '${parse_changelog_target}'" ;;
+      esac
+      ;;
+    *) bail "unrecognized OS type '$(uname -s)'" ;;
+  esac
+  action_dir="${HOME}/.create-gh-release-action"
+  mkdir -p -- "${action_dir}/bin"
+  (
+    cd -- "${action_dir}/bin"
+    download_and_checksum "https://github.com/taiki-e/parse-changelog/releases/download/v${parse_changelog_version}/parse-changelog-${parse_changelog_target}.tar.gz" "${parse_changelog_hash}"
+    tar xzf tmp
+  )
+  parse_changelog_options+=("${changelog}" "${version}")
+
+  # If allow_missing_changelog is true then default to empty value if version not found
+  if [[ "${allow_missing_changelog}" == "true" ]]; then
+    notes=$("${action_dir}/bin/parse-changelog${exe}" "${parse_changelog_options[@]}" || true)
+  else
+    notes=$("${action_dir}/bin/parse-changelog${exe}" "${parse_changelog_options[@]}")
+  fi
+
+  rm -rf -- "${action_dir}"
+fi
+
+# https://cli.github.com/manual/gh_release_view
+if GITHUB_TOKEN="${token}" gh release view "${tag}" &>/dev/null; then
+  # https://cli.github.com/manual/gh_release_delete
+  GITHUB_TOKEN="${token}" gh release delete "${tag}" -y || true
+fi
+
+# https://cli.github.com/manual/gh_release_create
+GITHUB_TOKEN="${token}" retry gh release create "${release_options[@]}" --title "${title}" --notes "${notes}"
+
+# Set (computed) prefix and version outputs for future step use.
+computed_prefix=${tag%"${version}"}
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  safe_computed_prefix=$(printf '%s' "${computed_prefix}" | tr -d '\n\r')
+  safe_version=$(printf '%s' "${version}" | tr -d '\n\r')
+  printf 'computed-prefix=%s\n' "${safe_computed_prefix}" >>"${GITHUB_OUTPUT}"
+  printf 'version=%s\n' "${safe_version}" >>"${GITHUB_OUTPUT}"
+else
+  # Self-hosted runner may not set GITHUB_OUTPUT.
+  warn "GITHUB_OUTPUT is not set; skip setting 'computed-prefix' and 'version' outputs"
+  printf 'computed-prefix: %s\n' "${computed_prefix}"
+  printf 'version: %s\n' "${version}"
+fi
