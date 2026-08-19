@@ -8,7 +8,7 @@
 
 **Test Policy SHA:** `843adf9e4b8f85d0c08b27b9d0b09dd094b54702`
 
-**Harden Agent Version:** `1`
+**Harden Agent Version:** `2`
 
 Action **taiki-e--create-gh-release-action/v1.11.0** was hardened automatically. 1 finding(s) were identified and resolved across 1 iteration(s).
 
@@ -16,7 +16,12 @@ Action **taiki-e--create-gh-release-action/v1.11.0** was hardened automatically.
 
 ### github-env-injection (severity: high)
 
-In main.sh, the values `computed_prefix` and `version` — both derived from user-controlled inputs (`INPUT_REF` / `inputs.ref` and `INPUT_PREFIX` / `inputs.prefix`) — are written to `$GITHUB_OUTPUT` without the required `tr -d '\n\r'` sanitization step. The writes use `printf 'computed-prefix=%s\n' "${computed_prefix}" >> "${GITHUB_OUTPUT}"` and `printf 'version=%s\n' "${version}" >> "${GITHUB_OUTPUT}"`. While a semver regex validation earlier in the script would reject newlines in practice, the check requires the explicit sanitization pipeline (`printf '%s' "$VAR" | tr -d '\n\r'`) immediately before every write to a special environment file when the source is untrusted input. The sanitization step is absent, making this a FAIL under the github-env-injection rule.
+In main.sh, the variables `computed_prefix` and `version` are derived from `INPUT_REF` (which maps to the user-controlled `inputs.ref` input, or the inherited `GITHUB_REF` env var) and written to `$GITHUB_OUTPUT` without the required newline-stripping sanitization (`tr -d '\n\r'`). An attacker supplying a crafted `ref` input containing embedded newlines could inject additional key=value pairs into `$GITHUB_OUTPUT`, potentially overwriting subsequent step outputs. The offending lines are:
+  `printf 'computed-prefix=%s\n' "${computed_prefix}" >> "${GITHUB_OUTPUT}"`
+  `printf 'version=%s\n' "${version}" >> "${GITHUB_OUTPUT}"`
+Fix: sanitize before writing, e.g.:
+  `safe=$(printf '%s' "${computed_prefix}" | tr -d '\n\r')`
+  `printf 'computed-prefix=%s\n' "${safe}" >> "${GITHUB_OUTPUT}"`
 
 Locations:
 
@@ -31,5 +36,5 @@ Locations:
 
 **Notes:**
 
-Fixed main.sh lines 196-197: added `tr -d '\n\r'` sanitization for both `computed_prefix` and `version` before writing them to `$GITHUB_OUTPUT`. Introduced `safe_computed_prefix` and `safe_version` intermediate variables using `printf '%s' "${VAR}" | tr -d '\n\r'`, then used those sanitized values in the `printf` writes to `$GITHUB_OUTPUT`. The unsanitized variables are still used in the fallback (non-GITHUB_OUTPUT) path for display purposes only, which is safe.
+Fixed github-env-injection in hardened/action/main.sh at lines 196-197. Both `computed_prefix` and `version` variables (derived from user-controlled INPUT_REF/GITHUB_REF) are now sanitized with `tr -d '\n\r'` before being written to $GITHUB_OUTPUT. This prevents an attacker from injecting additional key=value pairs into GITHUB_OUTPUT by supplying a crafted `ref` input containing embedded newlines.
 

@@ -1,0 +1,67 @@
+name: Test allow-missing-changelog
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up mock tools
+        run: |
+          mkdir -p /tmp/mock-bin
+
+          # Mock gh CLI
+          printf '#!/bin/sh\necho "mock-gh called with: $*" >&2\ncase "$1 $2" in\n  "release view")\n    exit 1\n    ;;\n  "release create")\n    echo "https://github.com/test/repo/releases/tag/test"\n    exit 0\n    ;;\n  "release delete")\n    exit 0\n    ;;\n  *)\n    exit 0\n    ;;\nesac\n' > /tmp/mock-bin/gh
+          chmod +x /tmp/mock-bin/gh
+
+          # Create fake parse-changelog binary that exits non-zero for missing versions
+          mkdir -p /tmp/fake-pc-dir
+          printf '#!/bin/sh\nchangelog="$1"\nversion="$2"\nnotes=$(awk "/^## \\[${version}\\]/{found=1; next} found && /^## /{exit} found{print}" "$changelog" 2>/dev/null)\nif [ -z "$notes" ]; then\n  echo "no entry for version ${version}" >&2\n  exit 1\nfi\necho "$notes"\n' > /tmp/fake-pc-dir/parse-changelog
+          chmod +x /tmp/fake-pc-dir/parse-changelog
+          tar czf /tmp/fake-parse-changelog.tar.gz -C /tmp/fake-pc-dir parse-changelog
+
+          # Mock curl to serve fake parse-changelog tarball
+          printf '#!/bin/sh\nout=""\nprev=""\nfor arg in "$@"; do\n  case "$prev" in\n    -o|--output) out="$arg" ;;\n  esac\n  prev="$arg"\ndone\ncase "$*" in\n  *parse-changelog*)\n    if [ -n "$out" ]; then\n      cat /tmp/fake-parse-changelog.tar.gz > "$out"\n    else\n      cat /tmp/fake-parse-changelog.tar.gz\n    fi\n    exit 0\n    ;;\n  *)\n    exec /usr/bin/curl "$@"\n    ;;\nesac\n' > /tmp/mock-bin/curl
+          chmod +x /tmp/mock-bin/curl
+
+          # Mock sha256sum to always succeed (bypass checksum verification)
+          printf '#!/bin/sh\nexit 0\n' > /tmp/mock-bin/sha256sum
+          chmod +x /tmp/mock-bin/sha256sum
+
+          echo "/tmp/mock-bin" >> "$GITHUB_PATH"
+
+      - name: Create test changelog
+        run: |
+          printf '# Changelog\n\n## [1.0.0] - 2024-01-01\n\n- Initial release\n' > /tmp/test-changelog.md
+
+      - id: action
+        uses: .
+        with:
+          title: 'Test Release $tag'
+          draft: 'true'
+          changelog: '/tmp/test-changelog.md'
+          allow-missing-changelog: 'true'
+          ref: refs/tags/v0.3.0
+
+      - name: Assert version output
+        env:
+          VERSION: ${{ steps.action.outputs.version }}
+        run: |
+          echo "version: $VERSION"
+          if [ "$VERSION" != "0.3.0" ]; then
+            echo "FAIL: expected version '0.3.0', got '$VERSION'"
+            exit 1
+          fi
+          echo "PASS: version output is correct"
+
+      - name: Assert computed-prefix output
+        env:
+          PREFIX: ${{ steps.action.outputs.computed-prefix }}
+        run: |
+          echo "computed-prefix: $PREFIX"
+          if [ "$PREFIX" != "v" ]; then
+            echo "FAIL: expected computed-prefix 'v', got '$PREFIX'"
+            exit 1
+          fi
+          echo "PASS: computed-prefix output is correct"

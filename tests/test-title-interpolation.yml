@@ -1,0 +1,61 @@
+name: Test title interpolation with version variable
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install mock gh CLI
+        run: |
+          mkdir -p /tmp/mock-bin
+          printf '#!/bin/sh\necho "mock-gh called with: $*" >&2\ncase "$1 $2" in\n  "release view")\n    exit 1\n    ;;\n  "release create")\n    while [ $# -gt 0 ]; do\n      if [ "$1" = "--title" ]; then\n        echo "MOCK_TITLE=$2" >> /tmp/mock-gh-output.txt\n      fi\n      shift\n    done\n    echo "https://github.com/test/repo/releases/tag/test"\n    exit 0\n    ;;\n  "release delete")\n    exit 0\n    ;;\n  *)\n    exit 0\n    ;;\nesac\n' > /tmp/mock-bin/gh
+          chmod +x /tmp/mock-bin/gh
+          echo "/tmp/mock-bin" >> "$GITHUB_PATH"
+
+      - id: action
+        uses: .
+        with:
+          title: 'Release $version ($tag)'
+          draft: 'true'
+          allow-missing-changelog: 'false'
+          ref: refs/tags/v0.6.0-test
+
+      - name: Assert version output
+        env:
+          VERSION: ${{ steps.action.outputs.version }}
+        run: |
+          echo "version: $VERSION"
+          if [ "$VERSION" != "0.6.0-test" ]; then
+            echo "FAIL: expected version '0.6.0-test', got '$VERSION'"
+            exit 1
+          fi
+          echo "PASS: version output is correct"
+
+      - name: Assert computed-prefix output
+        env:
+          PREFIX: ${{ steps.action.outputs.computed-prefix }}
+        run: |
+          echo "computed-prefix: $PREFIX"
+          if [ "$PREFIX" != "v" ]; then
+            echo "FAIL: expected computed-prefix 'v', got '$PREFIX'"
+            exit 1
+          fi
+          echo "PASS: computed-prefix output is correct"
+
+      - name: Assert title interpolation
+        run: |
+          if [ -f /tmp/mock-gh-output.txt ]; then
+            cat /tmp/mock-gh-output.txt
+            TITLE=$(grep "MOCK_TITLE=" /tmp/mock-gh-output.txt | cut -d= -f2-)
+            echo "title: $TITLE"
+            if [ "$TITLE" != "Release 0.6.0-test (v0.6.0-test)" ]; then
+              echo "FAIL: expected title 'Release 0.6.0-test (v0.6.0-test)', got '$TITLE'"
+              exit 1
+            fi
+            echo "PASS: title interpolation is correct"
+          else
+            echo "FAIL: mock gh output file not found"
+            exit 1
+          fi
