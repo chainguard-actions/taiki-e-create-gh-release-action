@@ -1,0 +1,58 @@
+name: Test allow-missing-changelog
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up mocks (gh, curl, sha256sum, parse-changelog)
+        run: |
+          mkdir -p "$HOME/.local/bin"
+
+          # Copy fake scripts from fixtures
+          cp "$GITHUB_WORKSPACE/tests/fixtures/fake-gh.sh" "$HOME/.local/bin/gh"
+          cp "$GITHUB_WORKSPACE/tests/fixtures/fake-curl.sh" "$HOME/.local/bin/curl"
+          cp "$GITHUB_WORKSPACE/tests/fixtures/fake-sha256sum.sh" "$HOME/.local/bin/sha256sum"
+          cp "$GITHUB_WORKSPACE/tests/fixtures/fake-sha256sum.sh" "$HOME/.local/bin/shasum"
+          chmod +x "$HOME/.local/bin/gh" "$HOME/.local/bin/curl" "$HOME/.local/bin/sha256sum" "$HOME/.local/bin/shasum"
+
+          # Create fake parse-changelog tarball (used by fake curl)
+          cp "$GITHUB_WORKSPACE/tests/fixtures/fake-parse-changelog.sh" /tmp/parse-changelog
+          chmod +x /tmp/parse-changelog
+          tar czf /tmp/fake-parse-changelog.tar.gz -C /tmp parse-changelog
+
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Run action with missing changelog entry (allow-missing-changelog=true)
+        id: action-allow
+        uses: .
+        with:
+          ref: refs/tags/v0.2.0
+          changelog: ${{ github.workspace }}/tests/fixtures/test-changelog.md
+          allow-missing-changelog: 'true'
+          draft: 'true'
+          token: ${{ github.token }}
+      - name: Assert action succeeded with allow-missing-changelog
+        env:
+          OUTCOME: ${{ steps.action-allow.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: expected action to succeed with allow-missing-changelog=true, got '$OUTCOME'"
+            exit 1
+          fi
+          echo "PASS: action succeeded with allow-missing-changelog=true"
+      - name: Assert version output
+        env:
+          ACTUAL: ${{ steps.action-allow.outputs.version }}
+        run: |
+          echo "version: $ACTUAL"
+          EXPECTED="0.2.0"
+          echo "expected: $EXPECTED"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "FAIL: expected version to be '$EXPECTED', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: version is correct"

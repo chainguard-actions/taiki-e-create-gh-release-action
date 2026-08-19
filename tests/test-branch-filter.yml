@@ -1,0 +1,46 @@
+name: Test branch filter input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up fake gh CLI
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          cp "$GITHUB_WORKSPACE/tests/fixtures/fake-gh.sh" "$HOME/.local/bin/gh"
+          chmod +x "$HOME/.local/bin/gh"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Run action with branch filter matching current branch
+        id: action
+        uses: .
+        with:
+          ref: refs/tags/v2.3.4
+          branch: 'act-harness'
+          allow-missing-changelog: 'true'
+          draft: 'true'
+          token: ${{ github.token }}
+      - name: Assert action succeeded with matching branch filter
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: expected action to succeed when branch matches filter, got '$OUTCOME'"
+            exit 1
+          fi
+          echo "PASS: action succeeded with branch filter"
+      - name: Assert version output
+        env:
+          ACTUAL: ${{ steps.action.outputs.version }}
+        run: |
+          echo "version: $ACTUAL"
+          EXPECTED="2.3.4"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "FAIL: expected version to be '$EXPECTED', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: version is correct"

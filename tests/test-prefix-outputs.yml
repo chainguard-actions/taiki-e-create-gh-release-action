@@ -1,0 +1,48 @@
+name: Test prefix and version outputs
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up fake gh CLI
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          cp "$GITHUB_WORKSPACE/tests/fixtures/fake-gh.sh" "$HOME/.local/bin/gh"
+          chmod +x "$HOME/.local/bin/gh"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Run action with prefix
+        id: action
+        uses: .
+        with:
+          ref: refs/tags/my-crate-v0.1.2
+          prefix: my-crate
+          title: '$prefix $version release'
+          allow-missing-changelog: 'true'
+          draft: 'true'
+          token: ${{ github.token }}
+      - name: Assert computed-prefix output
+        env:
+          ACTUAL: ${{ steps.action.outputs.computed-prefix }}
+        run: |
+          echo "computed-prefix: $ACTUAL"
+          if [ "$ACTUAL" != "my-crate-v" ]; then
+            echo "FAIL: expected computed-prefix to be 'my-crate-v', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: computed-prefix is correct"
+      - name: Assert version output
+        env:
+          ACTUAL: ${{ steps.action.outputs.version }}
+        run: |
+          echo "version: $ACTUAL"
+          EXPECTED="0.1.2"
+          echo "expected: $EXPECTED"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "FAIL: expected version to be '$EXPECTED', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: version is correct"
