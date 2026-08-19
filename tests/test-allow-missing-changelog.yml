@@ -1,0 +1,62 @@
+name: Test allow-missing-changelog
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up git, changelog, and mock gh CLI
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          TIMESTAMP="$(date +%s)"
+          TEST_TAG="v0.0.2-test-${TIMESTAMP}"
+          echo "TEST_TAG=${TEST_TAG}" >> "$GITHUB_ENV"
+          git tag "${TEST_TAG}"
+
+          # Create a changelog that does NOT have an entry for this version
+          printf '# Changelog\n\n## [0.0.1] - 2024-01-01\n\n- Initial release\n' > /tmp/test-changelog.md
+          echo "CHANGELOG_PATH=/tmp/test-changelog.md" >> "$GITHUB_ENV"
+
+          # Create a mock gh CLI that simulates success without real API calls
+          mkdir -p "$HOME/.local/bin"
+          MOCK_GH="$HOME/.local/bin/gh"
+          printf '%s\n' '#!/bin/sh' > "$MOCK_GH"
+          printf '%s\n' '# Mock gh CLI' >> "$MOCK_GH"
+          printf '%s\n' 'case "$1 $2" in' >> "$MOCK_GH"
+          printf '%s\n' '  "release view")' >> "$MOCK_GH"
+          printf '%s\n' '    exit 1 ;;' >> "$MOCK_GH"
+          printf '%s\n' '  "release delete")' >> "$MOCK_GH"
+          printf '%s\n' '    echo "Deleted release (mock)"; exit 0 ;;' >> "$MOCK_GH"
+          printf '%s\n' '  "release create")' >> "$MOCK_GH"
+          printf '%s\n' '    echo "https://github.com/mock/repo/releases/tag/mock"; exit 0 ;;' >> "$MOCK_GH"
+          printf '%s\n' '  *)' >> "$MOCK_GH"
+          printf '%s\n' '    echo "mock gh: unhandled: $*" >&2; exit 1 ;;' >> "$MOCK_GH"
+          printf '%s\n' 'esac' >> "$MOCK_GH"
+          chmod +x "$MOCK_GH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Run action with missing changelog entry (allow-missing-changelog=true)
+        id: action
+        uses: .
+        continue-on-error: false
+        with:
+          ref: refs/tags/${{ env.TEST_TAG }}
+          changelog: ${{ env.CHANGELOG_PATH }}
+          allow-missing-changelog: 'true'
+          token: ${{ github.token }}
+          draft: 'true'
+      - name: Assert action succeeded and outputs are set
+        env:
+          ACTUAL_VERSION: ${{ steps.action.outputs.version }}
+          ACTUAL_PREFIX: ${{ steps.action.outputs.computed-prefix }}
+        run: |
+          echo "version: $ACTUAL_VERSION"
+          echo "computed-prefix: $ACTUAL_PREFIX"
+          if [ -z "$ACTUAL_VERSION" ]; then
+            echo "FAIL: version output is empty"
+            exit 1
+          fi
+          echo "PASS: action succeeded with missing changelog entry"
