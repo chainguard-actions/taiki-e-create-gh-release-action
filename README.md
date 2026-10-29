@@ -6,13 +6,13 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 
 ## Versions
 
-| Version | Tag | Upstream commit |
-|---------|-----|-----------------|
-| v1.10.0 | [`v1.10.0`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/tree/v1.10.0) | [`f67cf7b`](https://github.com/taiki-e/create-gh-release-action/commit/f67cf7b2dadd83d36b981e674a6b08063997ce68) |
-| v1.11.0 | [`v1.11.0`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/tree/v1.11.0) | [`eba8ea9`](https://github.com/taiki-e/create-gh-release-action/commit/eba8ea96c86cca8a37f1b56e94b4d13301fba651) |
-| v1.9.1 | [`v1.9.1`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/tree/v1.9.1) | [`26b8050`](https://github.com/taiki-e/create-gh-release-action/commit/26b80501670402f1999aff4b934e1574ef2d3705) |
-| v1.9.2 | [`v1.9.2`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/tree/v1.9.2) | [`56a8b3f`](https://github.com/taiki-e/create-gh-release-action/commit/56a8b3f8449593aa02b91f7b84da564f476e94f0) |
-| v1.9.3 | [`v1.9.3`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/tree/v1.9.3) | [`c5baa0b`](https://github.com/taiki-e/create-gh-release-action/commit/c5baa0b5dc700cf06439d87935e130220a6882d9) |
+| Version | Tag | Upstream commit | Hardening report |
+|---------|-----|-----------------|------------------|
+| v1.10.0 | [`v1.10.0`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/tree/v1.10.0) | [`f67cf7b`](https://github.com/taiki-e/create-gh-release-action/commit/f67cf7b2dadd83d36b981e674a6b08063997ce68) | [`HARDENING.md`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/blob/v1.10.0/HARDENING.md) |
+| v1.11.0 | [`v1.11.0`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/tree/v1.11.0) | [`eba8ea9`](https://github.com/taiki-e/create-gh-release-action/commit/eba8ea96c86cca8a37f1b56e94b4d13301fba651) | [`HARDENING.md`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/blob/v1.11.0/HARDENING.md) |
+| v1.9.1 | [`v1.9.1`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/tree/v1.9.1) | [`26b8050`](https://github.com/taiki-e/create-gh-release-action/commit/26b80501670402f1999aff4b934e1574ef2d3705) | [`HARDENING.md`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/blob/v1.9.1/HARDENING.md) |
+| v1.9.2 | [`v1.9.2`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/tree/v1.9.2) | [`56a8b3f`](https://github.com/taiki-e/create-gh-release-action/commit/56a8b3f8449593aa02b91f7b84da564f476e94f0) | [`HARDENING.md`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/blob/v1.9.2/HARDENING.md) |
+| v1.9.3 | [`v1.9.3`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/tree/v1.9.3) | [`c5baa0b`](https://github.com/taiki-e/create-gh-release-action/commit/c5baa0b5dc700cf06439d87935e130220a6882d9) | [`HARDENING.md`](https://github.com/chainguard-actions/taiki-e-create-gh-release-action/blob/v1.9.3/HARDENING.md) |
 
 ## Privacy
 
