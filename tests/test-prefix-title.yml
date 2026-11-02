@@ -1,0 +1,49 @@
+name: Test prefix and title interpolation
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake gh CLI (records calls instead of touching GitHub)
+        run: |
+          mkdir -p /tmp/fakebin
+          rm -f /tmp/gh-calls.log /tmp/gh-create-args
+          cat > /tmp/fakebin/gh <<'EOF'
+          #!/bin/sh
+          echo "$*" >> /tmp/gh-calls.log
+          if [ "$1" = "release" ] && [ "$2" = "view" ]; then exit 1; fi
+          if [ "$1" = "release" ] && [ "$2" = "create" ]; then
+            printf '%s\n' "$@" > /tmp/gh-create-args
+            exit 0
+          fi
+          exit 0
+          EOF
+          chmod +x /tmp/fakebin/gh
+          echo "/tmp/fakebin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+        with:
+          ref: refs/tags/my-crate-v0.1.2
+          prefix: my-crate
+          title: "$prefix release $version"
+      - name: Assert outputs
+        env:
+          VERSION: ${{ steps.action.outputs.version }}
+          PREFIX: ${{ steps.action.outputs.computed-prefix }}
+        run: |
+          echo "version: $VERSION"
+          echo "computed-prefix: $PREFIX"
+          if [ "$VERSION" != "0.1.2" ]; then echo "FAIL: expected version 0.1.2"; exit 1; fi
+          if [ "$PREFIX" != "my-crate-v" ]; then echo "FAIL: expected computed-prefix 'my-crate-v'"; exit 1; fi
+          echo "PASS"
+      - name: Assert gh release create arguments
+        run: |
+          cat /tmp/gh-create-args
+          mapfile -t ARGS < /tmp/gh-create-args
+          if [ "${ARGS[2]}" != "my-crate-v0.1.2" ]; then echo "FAIL: expected tag my-crate-v0.1.2"; exit 1; fi
+          TITLE=$(grep -x -A1 -- '--title' /tmp/gh-create-args | tail -n1)
+          echo "title: $TITLE"
+          if [ "$TITLE" != "my-crate release 0.1.2" ]; then echo "FAIL: expected title 'my-crate release 0.1.2'"; exit 1; fi
+          echo "PASS"

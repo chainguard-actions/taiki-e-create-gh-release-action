@@ -1,0 +1,45 @@
+name: Test explicit token input is used for gh
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake gh CLI (records calls and token instead of touching GitHub)
+        run: |
+          mkdir -p /tmp/fakebin
+          rm -f /tmp/gh-calls.log /tmp/gh-tokens.log
+          cat > /tmp/fakebin/gh <<'EOF'
+          #!/bin/sh
+          echo "$*" >> /tmp/gh-calls.log
+          echo "${GITHUB_TOKEN:-}" >> /tmp/gh-tokens.log
+          case "$1 $2" in
+            "release view") exit 1 ;;
+          esac
+          exit 0
+          EOF
+          chmod +x /tmp/fakebin/gh
+          echo "/tmp/fakebin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+        with:
+          ref: refs/tags/v1.2.3
+          token: explicit-test-token-value
+      - name: Assert gh received the explicit token and outputs are set
+        env:
+          VERSION: ${{ steps.action.outputs.version }}
+          PREFIX: ${{ steps.action.outputs.computed-prefix }}
+        run: |
+          echo "version: $VERSION"
+          echo "computed-prefix: $PREFIX"
+          cat /tmp/gh-calls.log
+          if ! grep -q '^release create v1.2.3' /tmp/gh-calls.log; then
+            echo "FAIL: gh release create not called for v1.2.3"; exit 1
+          fi
+          if grep -vqx 'explicit-test-token-value' /tmp/gh-tokens.log; then
+            echo "FAIL: gh was invoked with a token other than the explicit one"; exit 1
+          fi
+          if [ "$VERSION" != "1.2.3" ]; then echo "FAIL: expected version 1.2.3"; exit 1; fi
+          if [ "$PREFIX" != "v" ]; then echo "FAIL: expected computed-prefix v"; exit 1; fi
+          echo "PASS"
