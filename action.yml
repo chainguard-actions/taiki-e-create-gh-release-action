@@ -1,13 +1,14 @@
 name: Create GitHub Releases based on changelog
 description: GitHub Action for creating GitHub Releases based on changelog
+
 inputs:
   changelog:
     description: Path to changelog (variables `$tag`, `$version`, `$prefix`, and any string)
     required: false
   allow-missing-changelog:
     description: >
-      Create the release even if the changelog entry corresponding to the version is missing. The default value of the changelog will be an empty string.
-
+      Create the release even if the changelog entry corresponding to the version is missing.
+      The default value of the changelog will be an empty string.
     required: false
     default: 'false'
   title:
@@ -23,39 +24,49 @@ inputs:
     required: false
   prefix:
     description: >
-      An optional pattern that matches a prefix for the release tag, before the version number.
+      An optional pattern that matches a prefix for the release tag, before the
+      version number.
 
-      If a prefix is provided, an optional '-' character is permitted (but not required) between the prefix and the version number.   For example, the tags 'my-crate-v0.1.2' and 'my-crate0.1.0' both have the prefix 'my-crate'.
+      If a prefix is provided, an optional '-' character is permitted (but not
+      required) between the prefix and the version number.   For example, the
+      tags 'my-crate-v0.1.2' and 'my-crate0.1.0' both have the prefix 'my-crate'.
 
-      This is interpreted as a bash-style regular expression, so it may be used to match multiple prefix strings. Therefore, literal characters that are part of bash's regular expression syntax, such as `$`, `^`, `[`, `]`, `{`, `}`, `(`, `)`, and `|` must be escaped if they occur in the prefix pattern.
+      This is interpreted as a bash-style regular expression, so it may be used
+      to match multiple prefix strings. Therefore, literal characters that
+      are part of bash's regular expression syntax, such as `$`, `^`, `[`, `]`,
+      `{`, `}`, `(`, `)`, and `|` must be escaped if they occur in the prefix
+      pattern.
 
-      If a prefix pattern is provided, the portion of the tag that matched the prefix can be interpolated into `title` and `changelog` via the `$prefix` variable.
-
+      If a prefix pattern is provided, the portion of the tag that matched the
+      prefix can be interpolated into `title` and `changelog` via the `$prefix`
+      variable.
     required: false
     default: ''
   token:
     description: >
       GitHub token for creating GitHub Releases.
 
-      If not set this option, the GITHUB_TOKEN environment variable will be used. If not set both this option and the GITHUB_TOKEN environment variable, github.token will be used.
-
+      If not set this option, the GITHUB_TOKEN environment variable will be used.
+      If not set both this option and the GITHUB_TOKEN environment variable, github.token will be used.
     required: false
   ref:
     description: >
       Fully-formed tag ref for this release.
 
       If not set this option, the GITHUB_REF environment variable (automatically set by GitHub Actions) will be used.
-
     required: false
+
 outputs:
   computed-prefix:
     description: >
       The computed prefix, including '-' and 'v' if found.
-
     value: ${{ steps.main.outputs.computed-prefix }}
   version:
-    description: The version number extracted from the tag. The tag name is a concatenation of computed-prefix and version.
+    description:
+      The version number extracted from the tag. The tag name is a concatenation of computed-prefix
+      and version.
     value: ${{ steps.main.outputs.version }}
+
 # Note:
 # - inputs.* should be manually mapped to INPUT_* due to https://github.com/actions/runner/issues/665
 # - Use GITHUB_*/RUNNER_* instead of github.*/runner.* due to https://github.com/actions/runner/issues/2185
